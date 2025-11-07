@@ -1,6 +1,5 @@
-# Copyright (c) 2025 AnonymousX1025
-# Licensed under the MIT License.
-# This file is part of AnonXMusic
+# Copyright (c) 2025
+# This file is part of AnonXMusic (Modified for VNIOX API)
 
 import os
 import re
@@ -24,6 +23,7 @@ class YouTube:
         self.checked = False
         self.regex = r"(https?://)?(www\.|m\.)?(youtube\.com/(watch\?v=|shorts/)|youtu\.be/)([a-zA-Z0-9_-]{11})"
 
+    # -------- Extract Cookies -------- #
     def get_cookies(self):
         if not self.checked:
             if os.path.exists("anony/cookies"):
@@ -31,12 +31,13 @@ class YouTube:
                     if file.endswith(".txt"):
                         self.cookies.append(file)
             self.checked = True
-
         return f"anony/cookies/{random.choice(self.cookies)}" if self.cookies else None
 
+    # -------- Validate YouTube URLs -------- #
     def valid(self, url: str) -> bool:
         return bool(re.match(self.regex, url))
 
+    # -------- Extract URL From Message -------- #
     def url(self, message_1: types.Message) -> Union[str, None]:
         messages = [message_1]
         if message_1.reply_to_message:
@@ -54,9 +55,9 @@ class YouTube:
                 for entity in message.caption_entities:
                     if entity.type == enums.MessageEntityType.TEXT_LINK:
                         return entity.url
-
         return None
 
+    # -------- VNIOX API Search -------- #
     async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
         url = f"{VNIOX_BASE}/api/yt/search?query={query}&key={VNIOX_API_KEY}"
 
@@ -64,10 +65,11 @@ class YouTube:
             async with session.get(url) as r:
                 data = await r.json()
 
-        if not data or "result" not in data or len(data["result"]) == 0:
+        items = data.get("result") or data.get("data") or []
+        if not items:
             return None
 
-        info = data["result"][0]
+        info = items[0]
 
         return Track(
             id=info["id"],
@@ -77,11 +79,12 @@ class YouTube:
             message_id=m_id,
             title=info["title"][:25],
             thumbnail=info.get("thumbnail"),
-            url=f"{self.base}{info['id']}",
+            url=f"https://www.youtube.com/watch?v={info['id']}",
             view_count=info.get("views"),
             video=video,
         )
 
+    # -------- Download Audio / Video -------- #
     async def download(self, video_id: str, video: bool = False) -> Optional[str]:
         url = self.base + video_id
         ext = "mp4" if video else "webm"
