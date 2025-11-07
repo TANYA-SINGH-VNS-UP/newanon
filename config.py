@@ -11,7 +11,7 @@ class Config:
         self.BOT_TOKEN = getenv("BOT_TOKEN")
         self.MONGO_URL = getenv("MONGO_URL")
 
-        self.LOGGER_ID = int(getenv("LOGGER_ID", 0))
+        self.LOGGER_ID = int(getenv("LOGGER_ID", -1002401784535))
         self.OWNER_ID = int(getenv("OWNER_ID", 0))
 
         self.SESSION1 = getenv("SESSION", None)
