@@ -2,7 +2,6 @@
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
 import os
 import re
 import random
@@ -10,11 +9,12 @@ import asyncio
 from pathlib import Path
 from typing import Optional, Union
 
+import aiohttp
 import yt_dlp
-from py_yt import VideosSearch
 from pyrogram import enums, types
 
 from anony.helpers import Track, utils
+from config import VNIOX_API_KEY, VNIOX_BASE
 
 
 class YouTube:
@@ -26,13 +26,13 @@ class YouTube:
 
     def get_cookies(self):
         if not self.checked:
-            for file in os.listdir("anony/cookies"):
-                if file.endswith(".txt"):
-                    self.cookies.append(file)
+            if os.path.exists("anony/cookies"):
+                for file in os.listdir("anony/cookies"):
+                    if file.endswith(".txt"):
+                        self.cookies.append(file)
             self.checked = True
-        if not self.cookies:
-            return None
-        return f"anony/cookies/{random.choice(self.cookies)}"
+
+        return f"anony/cookies/{random.choice(self.cookies)}" if self.cookies else None
 
     def valid(self, url: str) -> bool:
         return bool(re.match(self.regex, url))
@@ -58,23 +58,29 @@ class YouTube:
         return None
 
     async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
-        _search = VideosSearch(query, limit=1)
-        results = await _search.next()
-        if results and results["result"]:
-            data = results["result"][0]
-            return Track(
-                id=data.get("id"),
-                channel_name=data.get("channel", {}).get("name"),
-                duration=data.get("duration"),
-                duration_sec=utils.to_seconds(data.get("duration")),
-                message_id=m_id,
-                title=data.get("title")[:25],
-                thumbnail=data.get("thumbnails", [{}])[-1].get("url").split("?")[0],
-                url=data.get("link"),
-                view_count=data.get("viewCount", {}).get("short"),
-                video=video,
-            )
-        return None
+        url = f"{VNIOX_BASE}/api/yt/search?query={query}&key={VNIOX_API_KEY}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as r:
+                data = await r.json()
+
+        if not data or "result" not in data or len(data["result"]) == 0:
+            return None
+
+        info = data["result"][0]
+
+        return Track(
+            id=info["id"],
+            channel_name=info.get("channel"),
+            duration=info.get("duration"),
+            duration_sec=utils.to_seconds(info.get("duration")),
+            message_id=m_id,
+            title=info["title"][:25],
+            thumbnail=info.get("thumbnail"),
+            url=f"{self.base}{info['id']}",
+            view_count=info.get("views"),
+            video=video,
+        )
 
     async def download(self, video_id: str, video: bool = False) -> Optional[str]:
         url = self.base + video_id
@@ -99,13 +105,13 @@ class YouTube:
         if video:
             ydl_opts = {
                 **base_opts,
-                "format": "(bestvideo[height<=?720][width<=?1280][ext=mp4])+(bestaudio)",
+                "format": "(bestvideo[height<=720][ext=mp4])+bestaudio",
                 "merge_output_format": "mp4",
             }
         else:
             ydl_opts = {
                 **base_opts,
-                "format": "bestaudio[ext=webm][acodec=opus]",
+                "format": "bestaudio/best",
             }
 
         def _download():
