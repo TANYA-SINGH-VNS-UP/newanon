@@ -57,34 +57,48 @@ class YouTube:
                         return entity.url
         return None
 
-    # -------- VNIOX API Search -------- #
+    # -------- VNIOX API Search (with graceful fallbacks) -------- #
     async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
         url = f"{VNIOX_BASE}/api/yt/search?query={query}&key={VNIOX_API_KEY}"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as r:
-                data = await r.json()
+                # If API throws non-200, avoid crash
+                if r.status != 200:
+                    return None
+                data = await r.json(content_type=None)
 
-        items = data.get("result") or data.get("data") or []
+        # Many community APIs return "result" OR "data"
+        items = (data.get("result") or data.get("data") or []) if isinstance(data, dict) else []
         if not items:
             return None
 
         info = items[0]
+        vid = info.get("id") or info.get("videoId")
+        if not vid:
+            return None
+
+        # Duration: prefer "duration" like "03:45"; fall back to seconds
+        dur = info.get("duration") or info.get("duration_text") or ""
+        dur_sec = utils.to_seconds(dur) if dur else (info.get("duration_seconds") or 0)
 
         return Track(
-            id=info["id"],
-            channel_name=info.get("channel"),
-            duration=info.get("duration"),
-            duration_sec=utils.to_seconds(info.get("duration")),
+            id=vid,
+            channel_name=info.get("channel") or info.get("channelTitle"),
+            duration=dur or (utils.to_time(dur_sec) if dur_sec else None),
+            duration_sec=dur_sec,
             message_id=m_id,
-            title=info["title"][:25],
-            thumbnail=info.get("thumbnail"),
-            url=f"https://www.youtube.com/watch?v={info['id']}",
-            view_count=info.get("views"),
+            title=(info.get("title") or "")[:25],
+            thumbnail=(
+                info.get("thumbnail") or
+                info.get("thumbnails", [{}])[-1].get("url") if isinstance(info.get("thumbnails"), list) else None
+            ),
+            url=f"{self.base}{vid}",
+            view_count=info.get("views") or (info.get("viewCount", {}).get("short") if isinstance(info.get("viewCount"), dict) else None),
             video=video,
         )
 
-    # -------- Download Audio / Video -------- #
+    # -------- Download Audio / Video via yt-dlp -------- #
     async def download(self, video_id: str, video: bool = False) -> Optional[str]:
         url = self.base + video_id
         ext = "mp4" if video else "webm"
