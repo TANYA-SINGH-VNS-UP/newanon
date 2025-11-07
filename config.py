@@ -35,3 +35,9 @@ class Config:
         ]
         if missing:
             raise SystemExit(f"Missing required environment variables: {', '.join(missing)}")
+
+
+# VNIOX API
+VNIOX_API_KEY = "VNI0X_eAnzJuM9kfjHaMA"
+VNIOX_BASE = "https://api.vniox.store"
+
