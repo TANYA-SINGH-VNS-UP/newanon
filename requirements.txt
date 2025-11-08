@@ -8,5 +8,4 @@ py-tgcalls~=2.2.8
 py-yt-search~=0.5
 python-dotenv~=1.1.1
 yt-dlp[default]>=2025.10.31.222828.dev0
-pyrogram>=2.0.106
-tgcrypto
+
